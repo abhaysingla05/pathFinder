@@ -51,7 +51,8 @@ export class GeminiAPI {
       temperature: 0.3,
       topK: 20,
       topP: 0.8,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 1024,
+      candidateCount: 1,
     };
 
     const generationConfig = { ...defaultConfig, ...config };

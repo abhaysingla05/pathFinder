@@ -7,9 +7,9 @@ import { QuizStep } from './steps/QuizStep';
 import { RoadmapDisplay } from './steps/RoadmapDisplay';
 import { generateQuiz, generateRoadmap } from '../../lib/gemini';
 import { Toaster, toast } from 'sonner';
-import { ProgressBar } from './ProgressBar';
-import { SkeletonLoader } from './SkeletonLoader';
 import { TimeCommitmentStep } from './steps/TimeCommitmentStep';
+import { LoadingState } from '../common/LoadingState';
+import { ProgressBar } from '../common/ProgressBar';
 
 interface AssessmentFlowProps {
   onClose: () => void;
@@ -17,6 +17,8 @@ interface AssessmentFlowProps {
 
 export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [assessmentData, setAssessmentData] = useState<AssessmentData>({
     goal: '',
     skillLevel: 3,
@@ -28,36 +30,79 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
     isCustomGoal: false
   });
   const [loading, setLoading] = useState(false);
-  const totalSteps = 5; // Goal -> Focus -> Time -> Quiz -> Roadmap
+  const totalSteps = 5;
+
+  // Helper function to simulate progress
+  const startProgressSimulation = () => {
+    setLoadingProgress(0);
+    return setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + Math.random() * 10;
+      });
+    }, 1000);
+  };
 
   const handleNext = async (data: AssessmentData) => {
     try {
       setAssessmentData(data);
       
-      // Generate quiz after time commitment
-      if (currentStep === 2) {
+      if (currentStep === 2) { // After TimeCommitmentStep
         setLoading(true);
-        const quiz = await generateQuiz({
-          goal: data.goal,
-          skillLevel: data.skillLevel,
-          focusAreas: data.focusAreas,
-          timeCommitment: data.timeCommitment
-        });
-        setAssessmentData((prev) => ({ ...prev, generatedQuiz: quiz }));
+        setLoadingMessage('Crafting your personalized assessment...');
+        
+        // Start progress simulation
+        const progressInterval = startProgressSimulation();
+        
+        try {
+          const quiz = await generateQuiz({
+            goal: data.goal,
+            skillLevel: data.skillLevel,
+            focusAreas: data.focusAreas,
+            timeCommitment: data.timeCommitment
+          });
+          
+          // Complete progress and cleanup
+          clearInterval(progressInterval);
+          setLoadingProgress(100);
+          
+          setAssessmentData((prev) => ({ ...prev, generatedQuiz: quiz }));
+          setCurrentStep((prev) => prev + 1);
+        } catch (error) {
+          clearInterval(progressInterval);
+          throw error;
+        }
       } 
-      // Generate roadmap after quiz
-      else if (currentStep === 3) {
+      else if (currentStep === 3) { // After QuizStep
         setLoading(true);
-        const roadmap = await generateRoadmap(data);
-        setAssessmentData((prev) => ({ ...prev, roadmap }));
+        setLoadingMessage('Building your personalized learning roadmap...');
+        
+        const progressInterval = startProgressSimulation();
+        
+        try {
+          const roadmap = await generateRoadmap(data);
+          
+          // Complete progress and cleanup
+          clearInterval(progressInterval);
+          setLoadingProgress(100);
+          
+          setAssessmentData((prev) => ({ ...prev, roadmap }));
+          setCurrentStep((prev) => prev + 1);
+        } catch (error) {
+          clearInterval(progressInterval);
+          throw error;
+        }
+      } 
+      else {
+        setCurrentStep((prev) => prev + 1);
       }
-      
-      setCurrentStep((prev) => prev + 1);
     } catch (error) {
       console.error('Error in assessment flow:', error);
       toast.error('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+      setLoadingProgress(0);
+      setLoadingMessage('');
     }
   };
 
@@ -90,33 +135,39 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
         data={assessmentData.roadmap} 
         onClose={onClose} 
       />
-    ) : (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-      </div>
-    ),
+    ) : null,
   ];
+
+  const getStepProgress = () => {
+    return ((currentStep + 1) / totalSteps) * 100;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {loading ? (
-        <div className="max-w-2xl mx-auto py-12">
-          <SkeletonLoader />
-          <p className="text-center text-gray-600 mt-4">
-            {currentStep === 2 
-              ? 'Generating your personalized quiz...' 
-              : 'Creating your learning roadmap...'}
-          </p>
-        </div>
-      ) : (
-        <div className="container mx-auto px-4 py-8">
-          <ProgressBar 
-            currentStep={currentStep} 
-            totalSteps={totalSteps} 
-          />
-          {steps[currentStep]}
-        </div>
-      )}
+      <div className="container mx-auto px-4 py-8">
+        {/* Always show overall progress */}
+        <ProgressBar 
+          progress={getStepProgress()}
+          message={`Step ${currentStep + 1} of ${totalSteps}`}
+        />
+
+        {loading ? (
+          <div className="mt-8">
+            <LoadingState message={loadingMessage} />
+            <div className="mt-8">
+              <ProgressBar 
+                progress={loadingProgress}
+                message={loadingMessage}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="mt-8">
+            {steps[currentStep]}
+          </div>
+        )}
+      </div>
+
       <Toaster 
         position="top-center" 
         richColors 
