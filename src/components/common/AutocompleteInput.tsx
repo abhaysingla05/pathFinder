@@ -1,9 +1,12 @@
 import { useState } from 'react';
 
-interface AutocompleteInputProps {
+// components/common/AutocompleteInput.tsx
+export interface AutocompleteInputProps {
   value: string;
   onChange: (value: string) => void;
   suggestions: string[];
+  placeholder?: string;
+  allowCustomInput?: boolean; // Add this line
 }
 
 export const AutocompleteInput = ({ 

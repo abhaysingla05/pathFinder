@@ -1,16 +1,9 @@
 import { useState } from 'react';
 import { AssessmentData } from '../../../types/assessment';
 import { AutocompleteInput } from '../../common/AutocompleteInput';
+import { LEARNING_PATHS } from './LearningPaths';
 
-const GOAL_SUGGESTIONS = [
-  'Web Development',
-  'Data Science',
-  'Machine Learning',
-  'Mobile App Development',
-  'UI/UX Design',
-  'Digital Marketing',
-  'Cloud Computing',
-];
+
 
 interface GoalStepProps {
   data: AssessmentData;
@@ -19,9 +12,16 @@ interface GoalStepProps {
 
 export default function GoalStep({ data, onNext }: GoalStepProps) {
   const [localData, setLocalData] = useState(data);
+  const [isCustomGoal, setIsCustomGoal] = useState(false);
 
   const handleGoalChange = (value: string) => {
-    setLocalData((prev) => ({ ...prev, goal: value }));
+    const isKnownPath = value in LEARNING_PATHS;
+    setIsCustomGoal(!isKnownPath);
+    setLocalData((prev) => ({ 
+      ...prev, 
+      goal: value,
+      isCustomGoal: !isKnownPath 
+    }));
   };
 
   const handleSkillLevelChange = (level: number) => {
@@ -31,7 +31,7 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (localData.goal.trim()) {
-      onNext(localData);
+      onNext({ ...localData, isCustomGoal });
     }
   };
 
@@ -44,8 +44,15 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
           <AutocompleteInput
             value={localData.goal}
             onChange={handleGoalChange}
-            suggestions={GOAL_SUGGESTIONS}
+            suggestions={Object.keys(LEARNING_PATHS)}
+            allowCustomInput={true}
+            placeholder="Enter a learning goal (e.g., Web Development, Photography)"
           />
+          {isCustomGoal && (
+            <p className="mt-2 text-sm text-gray-600">
+              Custom learning path will be generated based on your goal
+            </p>
+          )}
         </div>
 
         <div>
@@ -64,6 +71,9 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
               </button>
             ))}
           </div>
+          <p className="mt-2 text-sm text-gray-600">
+            1 = Beginner, 5 = Expert
+          </p>
         </div>
 
         <button
