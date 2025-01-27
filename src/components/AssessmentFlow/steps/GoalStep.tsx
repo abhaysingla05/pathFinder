@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AssessmentData } from '../../../types/assessment';
 import { AutocompleteInput } from '../../common/AutocompleteInput';
 
@@ -17,10 +18,20 @@ interface GoalStepProps {
 }
 
 export default function GoalStep({ data, onNext }: GoalStepProps) {
+  const [localData, setLocalData] = useState(data);
+
+  const handleGoalChange = (value: string) => {
+    setLocalData((prev) => ({ ...prev, goal: value }));
+  };
+
+  const handleSkillLevelChange = (level: number) => {
+    setLocalData((prev) => ({ ...prev, skillLevel: level }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (data.goal.trim()) {
-      onNext(data);
+    if (localData.goal.trim()) {
+      onNext(localData);
     }
   };
 
@@ -31,11 +42,12 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
         <div>
           <label className="block text-lg mb-2">What do you want to learn?</label>
           <AutocompleteInput
-            value={data.goal}
-            onChange={(value) => onNext({ ...data, goal: value })}
+            value={localData.goal}
+            onChange={handleGoalChange}
             suggestions={GOAL_SUGGESTIONS}
           />
         </div>
+
         <div>
           <label className="block text-lg mb-2">Current skill level (1-5)</label>
           <div className="flex gap-2">
@@ -43,9 +55,9 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
               <button
                 key={n}
                 type="button"
-                onClick={() => onNext({ ...data, skillLevel: n })}
+                onClick={() => handleSkillLevelChange(n)}
                 className={`px-4 py-2 rounded-lg ${
-                  data.skillLevel === n ? 'bg-blue-600 text-white' : 'bg-gray-100'
+                  localData.skillLevel === n ? 'bg-blue-600 text-white' : 'bg-gray-100'
                 }`}
               >
                 {n}
@@ -53,10 +65,11 @@ export default function GoalStep({ data, onNext }: GoalStepProps) {
             ))}
           </div>
         </div>
+
         <button
           type="submit"
           className="bg-blue-600 text-white px-6 py-3 rounded-lg w-full"
-          disabled={!data.goal.trim()}
+          disabled={!localData.goal.trim()}
         >
           Next: Focus Areas →
         </button>

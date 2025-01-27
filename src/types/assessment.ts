@@ -5,6 +5,7 @@ export interface AssessmentData {
     quizResponses: QuizResponse[];
     generatedQuiz?: QuizData;
     roadmap?: RoadmapData;
+    timeCommitment: number;
   }
   
   export interface QuizResponse {
@@ -30,10 +31,14 @@ export interface AssessmentData {
     week: number;
     topics: string[];
     resources: LearningResource[];
+    progress?: number; // e.g., 50 for 50%
   }
   
   export interface LearningResource {
-    type: 'video' | 'article';
+    type: 'video' | 'article' | 'course';
     title: string;
     url: string;
+    duration?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    category: string; // e.g., "Web Development"
   }

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { AssessmentData, QuizQuestion } from "../types";
-
+import { AssessmentData } from '../../../types/assessment';
+import { QuizQuestion } from "../types";
+import { Toaster, toast } from 'sonner';
 interface QuizStepProps {
   data: AssessmentData;
   onNext: (data: AssessmentData) => Promise<void>;
@@ -10,16 +11,25 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: string }>({});
 
+  const isCurrentQuestionAnswered = !!answers[currentQuestion];
   const handleAnswer = (questionId: number, answer: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
   const handleSubmit = async () => {
-    const quizResponses = Object.entries(answers).map(([questionId, answer]) => ({
-      questionId: parseInt(questionId),
-      answer
-    }));
-    await onNext({ ...data, quizResponses });
+    if (!isCurrentQuestionAnswered) { // NEW: Validation
+      toast.error('Please answer the question before proceeding');
+      return;
+    }
+    try {
+      const quizResponses = Object.entries(answers).map(([questionId, answer]) => ({
+        questionId: parseInt(questionId),
+        answer,
+      }));
+      await onNext({ ...data, quizResponses });
+    } catch (error) {
+      toast.error('Failed to generate roadmap. Please try again.');
+    }
   };
 
   if (!data.generatedQuiz) return null;
@@ -91,6 +101,7 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
           {currentQuestion === data.generatedQuiz.questions.length - 1 ? 'Generate Roadmap →' : 'Next →'}
         </button>
       </div>
+      <Toaster position="top-center" />
     </div>
   );
 };
