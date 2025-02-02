@@ -12,3 +12,17 @@ export interface GenerationConfig {
   topP?: number;
   maxOutputTokens?: number;
 }
+
+export interface CacheMetadata {
+  generatedAt: string;
+  goal: string;
+  skillLevel: number;
+  timeCommitment?: number;
+  focusAreas?: string[];
+  adjustedSkillLevel?: number;
+}
+
+export interface CachedItem<T> {
+  data: T;
+  metadata: CacheMetadata;
+}

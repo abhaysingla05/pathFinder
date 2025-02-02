@@ -52,54 +52,94 @@ Return ONLY the JSON, no additional text or formatting.`
   };
 };
 
+// lib/prompts/index.ts
 export const getRoadmapPrompt = (data: AssessmentData) => {
+  // Calculate content density based on time commitment
+  const hoursPerWeek = data.timeCommitment;
+  const contentDensity = hoursPerWeek <= 5 ? 'focused' : 
+                        hoursPerWeek <= 10 ? 'balanced' : 
+                        'comprehensive';
+  
+  // Fixed number of weeks for complete course coverage
+  const totalWeeks = 12; // Standard course duration
+
   return {
     system: SYSTEM_PROMPTS.roadmap,
-    user: `Create a personalized learning roadmap based on:
+    user: `
+Create a ${totalWeeks}-week learning roadmap for ${data.goal}, optimized for ${hoursPerWeek} hours/week:
 
 User Profile:
-- Goal: ${data.goal}
-- Initial Skill Level: ${data.skillLevel}
-- Adjusted Skill Level: ${data.quizAnalysis?.adjustedSkillLevel.overall || data.skillLevel}
+- Skill Level: ${data.skillLevel}/5
 - Focus Areas: ${data.focusAreas.join(', ')}
-- Time Commitment: ${data.timeCommitment} hours/week
+- Time Available: ${hoursPerWeek} hours/week
 
-Quiz Performance Analysis:
 ${data.quizAnalysis ? `
-- Strength Areas: ${data.quizAnalysis.strengthAreas.join(', ')}
-- Areas Needing Improvement: ${data.quizAnalysis.improvementAreas.join(', ')}
+Performance Analysis:
+- Strengths: ${data.quizAnalysis.strengthAreas.join(', ')}
+- Areas for Improvement: ${data.quizAnalysis.improvementAreas.join(', ')}
 - Knowledge Gaps: ${data.quizAnalysis.knowledgeGaps.map(gap => 
-  `${gap.area} (Level ${gap.currentLevel}/5): ${gap.concepts.join(', ')}`
-).join('; ')}
+  `${gap.area} (Level ${gap.currentLevel}/5)`
+).join(', ')}
 ` : ''}
 
-Instructions:
-1. Create a ${data.timeCommitment <= 5 ? 'concise' : 'comprehensive'} learning path
-2. ${data.quizAnalysis?.improvementAreas.length ? 
-  `Prioritize these areas: ${data.quizAnalysis.improvementAreas.join(', ')}` : 
-  'Cover all focus areas progressively'}
-3. Adjust content difficulty based on demonstrated knowledge level
-4. Structure weekly modules (${data.timeCommitment} hours/week commitment)
-5. Include practical exercises and real-world applications
+Weekly Structure (${hoursPerWeek} hours/week):
+${hoursPerWeek <= 5 ? `
+- 1-2 core topics per week
+- 2-3 focused resources
+- 1 small practical exercise
+- Estimated 1 hour per resource` :
+hoursPerWeek <= 10 ? `
+- 2-3 topics per week
+- 3-4 balanced resources
+- 1 medium project
+- Estimated 2 hours per resource` : `
+- 3-4 topics per week
+- 4-5 comprehensive resources
+- 1 major project
+- Estimated 3 hours per resource`}
 
-Return ONLY a JSON object with this EXACT structure:
+Return a JSON object with this structure:
 {
   "weeks": [
     {
       "week": number,
-      "topics": ["topic1", "topic2"],
+      "theme": "Weekly theme",
+      "topics": ["Topic list based on time commitment"],
       "resources": [
         {
           "type": "video/article/course",
-          "title": "string",
-          "url": "string",
-          "duration": "string",
+          "title": "Resource title",
+          "url": "URL",
+          "duration": "${Math.floor(hoursPerWeek / 3)} hours",
           "difficulty": "beginner/intermediate/advanced",
-          "category": "string"
+          "category": "Topic category"
         }
-      ]
+      ],
+      "project": {
+        "title": "Weekly project",
+        "description": "Project details",
+        "estimatedHours": ${Math.ceil(hoursPerWeek * 0.4)},
+        "type": "practice/implementation/comprehensive"
+      },
+      "weeklyHours": ${hoursPerWeek}
     }
-  ]
-}`
+  ],
+  "metadata": {
+    "totalWeeks": ${totalWeeks},
+    "weeklyCommitment": ${hoursPerWeek},
+    "difficulty": "${data.skillLevel <= 2 ? 'beginner' : data.skillLevel <= 4 ? 'intermediate' : 'advanced'}",
+    "focusAreas": ${JSON.stringify(data.focusAreas)}
+  }
+}
+
+Important Guidelines:
+1. Each week's content should fit within ${hoursPerWeek} hours
+2. Maintain progressive difficulty scaling
+3. Focus on ${data.quizAnalysis?.improvementAreas.join(', ') || 'core concepts'}
+4. Include practical applications
+5. Resources should be from reputable sources
+6. Projects should reinforce weekly learning
+
+Return ONLY the JSON object, no additional text.`
   };
 };

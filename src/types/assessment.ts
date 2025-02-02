@@ -13,7 +13,8 @@ export interface AssessmentData {
   isCustomGoal?: boolean; // Add this line
   quizAnalysis?: QuizAnalysis; // Add this line
 }
-
+// types/assessment.ts
+export type ProgressCallback = (chunk: number, total: number, status: string) => void;
 export interface QuizAnalysis {
   totalScore: number;
   maxPossibleScore: number;
@@ -72,22 +73,48 @@ export interface QuizAnalysis {
 
 
   
-  export interface RoadmapData {
-    weeks: RoadmapWeek[];
-  }
-  
-  export interface RoadmapWeek {
-    week: number;
-    topics: string[];
-    resources: LearningResource[];
-    progress?: number; // e.g., 50 for 50%
-  }
-  
-  export interface LearningResource {
-    type: 'video' | 'article' | 'course';
-    title: string;
-    url: string;
-    duration?: string;
-    difficulty?: 'beginner' | 'intermediate' | 'advanced';
-    category: string; // e.g., "Web Development"
-  }
+export interface RoadmapData {
+  weeks: RoadmapWeek[];
+  metadata: RoadmapMetadata;
+}
+
+export interface RoadmapWeek {
+  week: number;
+  theme: string;
+  topics: string[];
+  resources: LearningResource[];
+  projects: Project[];  // For multiple projects
+  project?: Project;    // For single project
+  weeklyHours: number;
+  assessmentCriteria?: string[];
+  progress?: number;
+}
+
+export interface LearningResource {
+  type: 'video' | 'article' | 'course';
+  title: string;
+  url: string;
+  duration: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  category: string;
+  description?: string;
+}
+export interface Project {
+  title: string;
+  description: string;
+  estimatedHours: number;
+  type: 'practice' | 'implementation' | 'comprehensive';
+  requirements?: string[];
+  skillsGained?: string[];
+}
+
+export interface RoadmapMetadata {
+  totalWeeks: number;
+  weeklyCommitment: number;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  focusAreas: string[];
+  totalDuration?: string;
+  prerequisites?: string[];
+  estimatedCompletion?: string;
+  learningPath?: string;
+}
