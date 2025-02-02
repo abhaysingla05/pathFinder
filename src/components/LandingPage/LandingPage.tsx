@@ -1,7 +1,7 @@
 import HeroSection from './components/HeroSection';
 import HowItWorks from './components/HowItWorks';
 import Testimonials from './components/Testimonials';
-import Footer from './components/Footer';
+// import Footer from './components/Footer';
 
 interface LandingPageProps {
   onStartAssessment: () => void;
@@ -13,7 +13,7 @@ export default function LandingPage({ onStartAssessment }: LandingPageProps) {
       <HeroSection onStartAssessment={onStartAssessment} />
       <HowItWorks />
       <Testimonials />
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 }

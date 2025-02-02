@@ -1,3 +1,4 @@
+///src/components/AssessmentFlow/ProgressBar.tsx
 interface ProgressBarProps {
     currentStep: number;
     totalSteps: number;

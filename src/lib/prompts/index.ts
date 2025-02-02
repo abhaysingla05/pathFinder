@@ -143,3 +143,46 @@ Important Guidelines:
 Return ONLY the JSON object, no additional text.`
   };
 };
+export const getWeeklyQuizPrompt = (topics: string[], weekNumber: number) => {
+  const difficultyMapping = {
+    1: { level: 'beginner', focus: 'fundamental concepts' },
+    2: { level: 'beginner-intermediate', focus: 'basic applications' },
+    3: { level: 'intermediate', focus: 'practical implementations' },
+    4: { level: 'intermediate-advanced', focus: 'complex scenarios' },
+    5: { level: 'advanced', focus: 'expert-level problems' }
+  };
+
+  // Determine difficulty based on week progression
+  const difficultyLevel = Math.min(Math.ceil(weekNumber / 3), 5); // Progress from beginner to advanced over 12 weeks
+  const difficulty = difficultyMapping[difficultyLevel as keyof typeof difficultyMapping];
+
+  return {
+    system: SYSTEM_PROMPTS.quiz,
+    user: `
+Generate a weekly quiz with EXACTLY this structure:
+{
+  "questions": [
+    {
+      "id": "mc1",
+      "text": "your multiple choice question here",
+      "type": "multiple_choice",
+      "options": ["option1", "option2", "option3", "option4"],
+      "correctAnswer": "option1"
+    },
+    {
+      "id": "oe1",
+      "text": "your open ended question here",
+      "type": "open_ended"
+    }
+  ]
+}
+Requirements:
+- EXACTLY 3 multiple-choice questions
+- EXACTLY 2 open-ended questions
+- Each multiple-choice question must have EXACTLY 4 options
+- Questions should be about: ${topics.join(', ')}
+- Difficulty level: ${difficulty.level}
+- Focus areas: ${difficulty.focus}
+Return ONLY the JSON, no additional text or formatting.`
+  };
+};

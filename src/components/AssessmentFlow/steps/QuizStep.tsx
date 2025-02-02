@@ -4,6 +4,7 @@ import { QuizQuestion, QuizResponse } from "../types";
 import { Toaster, toast } from 'sonner';
 import { analyzeQuizResponses } from '../../../lib/quizAnalysis';
 
+
 interface QuizStepProps {
   data: AssessmentData;
   onNext: (data: AssessmentData) => Promise<void>;

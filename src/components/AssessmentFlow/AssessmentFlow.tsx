@@ -1,6 +1,6 @@
 // components/AssessmentFlow/AssessmentFlow.tsx
 import { useState } from 'react';
-import { AssessmentData,ProgressCallback } from '../../types/assessment';
+import { AssessmentData } from '../../types/assessment';
 import GoalStep from './steps/GoalStep';
 import FocusStep from './steps/FocusStep';
 import { QuizStep } from './steps/QuizStep';
@@ -16,21 +16,10 @@ interface AssessmentFlowProps {
   onClose: () => void;
 }
 
-interface GenerationProgress {
-  currentChunk: number;
-  totalChunks: number;
-  status: string;
-}
-
 export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>({
-    currentChunk: 0,
-    totalChunks: 3, // 12 weeks divided into 3 chunks of 4 weeks each
-    status: ''
-  });
   const [assessmentData, setAssessmentData] = useState<AssessmentData>({
     goal: '',
     skillLevel: 3,
@@ -44,14 +33,8 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
   const [loading, setLoading] = useState(false);
   const totalSteps = 5;
 
-  const startProgressSimulation = (chunkIndex: number) => {
+  const startProgressSimulation = () => {
     setLoadingProgress(0);
-    setGenerationProgress(prev => ({
-      ...prev,
-      currentChunk: chunkIndex,
-      status: `Generating weeks ${chunkIndex * 4 + 1}-${Math.min((chunkIndex + 1) * 4, 12)}`
-    }));
-
     return setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 90) return prev;
@@ -60,22 +43,12 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
     }, 1000);
   };
 
-  const calculateTotalProgress = () => {
-    const baseProgress = (currentStep / totalSteps) * 100;
-    if (loading) {
-      const chunkProgress = (generationProgress.currentChunk / generationProgress.totalChunks) * 100;
-      const stepProgress = loadingProgress / generationProgress.totalChunks;
-      return baseProgress + (chunkProgress + stepProgress) / totalSteps;
-    }
-    return baseProgress;
-  };
-
-  const handleNext = async (data: AssessmentData) => {
+  const handleNext = async (data: AssessmentData) => {  
     try {
       if (currentStep === 2) { // After TimeCommitmentStep
         setLoading(true);
         setLoadingMessage('Crafting your personalized assessment...');
-        const progressInterval = startProgressSimulation(0);
+        const progressInterval = startProgressSimulation();
         
         try {
           const quiz = await generateQuiz({
@@ -98,55 +71,42 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
       else if (currentStep === 3) { // After QuizStep
         setLoading(true);
         setLoadingMessage('Analyzing your quiz responses...');
-  
+
         if (!data.generatedQuiz || !data.quizResponses.length) {
           throw new Error('Quiz data is missing');
         }
-  
+        // Analyze quiz responses
         const quizAnalysis = analyzeQuizResponses(
-          data.generatedQuiz.questions,
+          data.generatedQuiz!.questions,
           data.quizResponses,
-          Number(data.skillLevel) || 3
+          data.skillLevel
         );
-  
-        const adjustedSkillLevel = Number(quizAnalysis.adjustedSkillLevel.overall) || data.skillLevel;
-  
+        // Ensure we have a valid skill level
+      const adjustedSkillLevel = Number(quizAnalysis.adjustedSkillLevel.overall) || data.skillLevel;
+
+        // Update data with quiz analysis and adjusted skill level
         const updatedData = {
           ...data,
           quizAnalysis,
           skillLevel: adjustedSkillLevel
         };
-  
+        console.log('Updated assessment data:', updatedData);
+
         setLoadingMessage('Creating your personalized learning roadmap...');
+        const progressInterval = startProgressSimulation();
         
         try {
-          let currentProgressInterval: number;
-  
-          const roadmap = await generateRoadmap(
-            updatedData,
-            (chunk: number, total: number, status: string) => {
-              // Clear previous interval if it exists
-              if (currentProgressInterval) {
-                clearInterval(currentProgressInterval);
-              }
-  
-              setGenerationProgress({
-                currentChunk: chunk,
-                totalChunks: total,
-                status
-              });
-  
-              currentProgressInterval = startProgressSimulation(chunk);
-            }
-          );
-  
+          const roadmap = await generateRoadmap(updatedData);
+          clearInterval(progressInterval);
           setLoadingProgress(100);
+          
           setAssessmentData(prev => ({ ...prev, ...updatedData, roadmap }));
           setCurrentStep(prev => prev + 1);
         } catch (error) {
+          clearInterval(progressInterval);
           throw error;
         }
-      }  
+      } 
       else {
         setAssessmentData(prev => ({ ...prev, ...data }));
         setCurrentStep(prev => prev + 1);
@@ -158,11 +118,6 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
       setLoading(false);
       setLoadingProgress(0);
       setLoadingMessage('');
-      setGenerationProgress({
-        currentChunk: 0,
-        totalChunks: 3,
-        status: ''
-      });
     }
   };
 
@@ -182,24 +137,17 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <ProgressBar 
-          progress={calculateTotalProgress()}
+          progress={((currentStep + 1) / totalSteps) * 100}
           message={`Step ${currentStep + 1} of ${totalSteps}`}
         />
 
         {loading ? (
           <div className="mt-8">
-            <LoadingState 
-              message={loadingMessage}
-              subMessage={generationProgress.status}
-            />
+            <LoadingState message={loadingMessage} />
             <div className="mt-8">
               <ProgressBar 
                 progress={loadingProgress}
-                message={`${loadingMessage} ${
-                  generationProgress.status ? 
-                    `(${generationProgress.currentChunk + 1}/${generationProgress.totalChunks})` : 
-                    ''
-                }`}
+                message={loadingMessage}
               />
             </div>
           </div>
