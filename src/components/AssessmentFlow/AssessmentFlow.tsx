@@ -129,7 +129,12 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
       <QuizStep key="quiz" data={assessmentData} onNext={handleNext} />
     ) : null,
     assessmentData.roadmap ? (
-      <RoadmapDisplay key="roadmap" data={assessmentData.roadmap} onClose={onClose} />
+      <RoadmapDisplay
+      key="roadmap"
+      data={assessmentData.roadmap}
+      assessmentData={assessmentData} // Pass assessmentData here
+      onClose={onClose}
+    />
     ) : null,
   ];
 

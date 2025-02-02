@@ -67,11 +67,11 @@ export function validateRoadmapStructure(roadmap: any): roadmap is RoadmapData {
 
     return roadmap.weeks.every((week: any, weekIndex: number) => {
       // Basic week structure
-      const hasValidStructure = 
+      const hasValidStructure =
         typeof week.week === 'number' &&
         Array.isArray(week.topics) &&
         Array.isArray(week.resources) &&
-        week.topics.length > 0;  // Ensure at least one topic per week
+        week.topics.length > 0; // Ensure at least one topic per week
 
       if (!hasValidStructure) {
         console.error(`Roadmap validation: invalid structure in week ${weekIndex + 1}`);
@@ -80,7 +80,7 @@ export function validateRoadmapStructure(roadmap: any): roadmap is RoadmapData {
 
       // Validate resources
       return week.resources.every((resource: any, resourceIndex: number) => {
-        const isValidResource = 
+        const isValidResource =
           typeof resource.type === 'string' &&
           ['video', 'article', 'course'].includes(resource.type) &&
           typeof resource.title === 'string' &&

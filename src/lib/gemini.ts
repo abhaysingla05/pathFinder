@@ -1,6 +1,5 @@
 // lib/gemini.ts
-
-import { AssessmentData, LearningResource, ProgressCallback, QuizData, RoadmapData, RoadmapWeek , WeeklyQuizData} from '../types/assessment';
+import { AssessmentData, LearningResource, ProgressCallback, QuizData, RoadmapData, RoadmapWeek, WeeklyQuizData } from '../types/assessment';
 import { QuizGenerationInput, CachedItem } from './types/gemini';
 import { GeminiAPI } from './api/gemini';
 import { getQuizPrompt, getWeeklyQuizPrompt } from './prompts';
@@ -53,7 +52,6 @@ async function fetchRelevantLink(topic: string, type: 'article' | 'course'): Pro
   const baseURL = 'https://www.googleapis.com/customsearch/v1';
   const query = `${topic} ${type === 'article' ? 'article' : 'free course'}`;
   const url = `${baseURL}?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}&num=1`;
-
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -65,15 +63,18 @@ async function fetchRelevantLink(topic: string, type: 'article' | 'course'): Pro
   }
   return null;
 }
-
-
+interface CachedQuiz {
+  data: QuizData;
+  metadata: {
+    generatedAt: string;
+  };
+}
 // ✅ Generate Quiz
 export async function generateQuiz(userInput: QuizGenerationInput): Promise<QuizData> {
   const cacheKey = `quiz-${userInput.goal}-${userInput.skillLevel}-${userInput.timeCommitment}`;
   try {
-    const cached = AdvancedCache.get<QuizData>(cacheKey);
-    if (cached) return cached;
-
+    const cached = AdvancedCache.get<CachedQuiz>(cacheKey);
+    if (cached) return cached.data;
     console.log('Generating new quiz...', userInput);
     const { system, user } = getQuizPrompt(userInput);
     const responseText = await api.generate(system, user, {
@@ -82,17 +83,14 @@ export async function generateQuiz(userInput: QuizGenerationInput): Promise<Quiz
       topP: 0.8,
       maxOutputTokens: 2048,
     });
-
     if (!responseText) throw new Error('Empty response from API');
     const cleanedResponse = cleanJsonResponse(responseText);
     let quiz: QuizData = JSON.parse(cleanedResponse);
-
     if (!validateQuizStructure(quiz)) throw new Error('Invalid quiz format');
     await AdvancedCache.set(cacheKey, { data: quiz, metadata: { generatedAt: new Date().toISOString() } }, {
       tags: ['quiz', userInput.goal, `level-${userInput.skillLevel}`],
       version: '1.0.0',
     });
-
     return quiz;
   } catch (error) {
     console.error('Quiz generation failed:', error);
@@ -101,31 +99,17 @@ export async function generateQuiz(userInput: QuizGenerationInput): Promise<Quiz
 }
 
 // Generate Quiz for a Week
-export async function generateQuizForWeek(topics: string[], weekNumber: number): Promise<WeeklyQuizData> {
+export async function generateQuizForWeek(topics: string[], weekNumber: number, skillLevel: number): Promise<WeeklyQuizData> {
   const userInput = {
     goal: 'Weekly Assessment',
-    skillLevel: Math.min(Math.ceil(weekNumber / 3), 5), // Progressive skill level
+    skillLevel: skillLevel || 3, // Use dynamic skill level
     timeCommitment: 2, // Time commitment in hours
     focusAreas: topics,
   };
-
-  const { system, user } = getWeeklyQuizPrompt(topics, weekNumber);
-  const responseText = await api.generate(system, user, {
-    temperature: 0.3,
-    topK: 20,
-    topP: 0.8,
-    maxOutputTokens: 2048,
-  });
-
-  if (!responseText) throw new Error('Empty response from API');
-  const cleanedResponse = cleanJsonResponse(responseText);
-  let quiz: QuizData = JSON.parse(cleanedResponse);
-
-  if (!validateQuizStructure(quiz)) throw new Error('Invalid quiz format');
-
+  const quiz = await generateQuiz(userInput);
   return {
     data: {
-      questions: quiz.questions || [], // Ensure questions array exists
+      questions: quiz.questions || [],
     },
     metadata: {
       generatedAt: new Date().toISOString(),
@@ -135,18 +119,31 @@ export async function generateQuizForWeek(topics: string[], weekNumber: number):
   };
 }
 
+// Generate personalized feedback and recommendations
+export function generateFeedbackAndRecommendations(score: number, topics: string[]): { feedback: string; recommendations: string[] } {
+  let feedback = '';
+  if (score >= 90) {
+    feedback = 'Excellent! You’ve mastered this week’s content.';
+  } else if (score >= 70) {
+    feedback = 'Good job! Review the resources for areas you missed.';
+  } else {
+    feedback = 'You need to improve. Revisit the resources and retake the quiz.';
+  }
+  // Generate recommendations based on topics
+  const recommendations = topics.map((topic) => `Review resources related to "${topic}" for better understanding.`);
+  return { feedback, recommendations };
+}
+
 // ✅ Generate Roadmap
 export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData> {
   const cacheKey = `roadmap-${data.goal}-${data.skillLevel}-${data.focusAreas.join('-')}`;
   try {
     const cached = AdvancedCache.get<RoadmapData>(cacheKey);
     if (cached) return cached;
-
     console.log('Starting roadmap generation...');
     const totalWeeks = 12;
     const weeksPerChunk = 4;
     const totalChunks = totalWeeks / weeksPerChunk;
-
     const completeRoadmap: RoadmapData = {
       weeks: [],
       metadata: {
@@ -160,11 +157,11 @@ export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
       const startWeek = chunkIndex * weeksPerChunk + 1;
       const endWeek = Math.min(startWeek + weeksPerChunk - 1, totalWeeks);
-
+      const adjustedSkillLevel = Math.min(data.skillLevel + chunkIndex, 5); // Cap at 5
       const chunkPrompt = `
         Create a structured learning plan for weeks ${startWeek}-${endWeek} of a ${totalWeeks}-week roadmap focused on "${data.goal}".
         Student Profile:
-        Skill Level: ${data.skillLevel}/5
+        Skill Level: ${adjustedSkillLevel}/5
         Focus Areas: ${data.focusAreas.join(', ')}
         Weekly Commitment: ${data.timeCommitment} hours
         Resource Requirements:
@@ -193,7 +190,6 @@ export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData
           }
         ]
       `;
-
       try {
         const responseText = await api.generate('', chunkPrompt, { temperature: 0.7, maxOutputTokens: 2048 });
         if (!responseText) throw new Error(`Empty response for weeks ${startWeek}-${endWeek}`);
@@ -202,9 +198,8 @@ export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData
         if (!Array.isArray(weekChunk)) throw new Error(`Invalid chunk structure for weeks ${startWeek}-${endWeek}`);
 
         // Fetch valid links for each resource
-        for (let week of weekChunk) {
-          week.quiz = await generateQuizForWeek(week.topics, week.week); // Pass the week number
-
+        for (const week of weekChunk) {
+          week.quiz = await generateQuizForWeek(week.topics, week.week, adjustedSkillLevel);
           week.resources = (
             await Promise.all(
               week.resources.map(async (res) => {
@@ -251,7 +246,6 @@ export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData
             ];
           }
         }
-
         completeRoadmap.weeks.push(...weekChunk);
       } catch (chunkError) {
         console.error(`Error generating weeks ${startWeek}-${endWeek}:`, chunkError);
@@ -264,7 +258,6 @@ export async function generateRoadmap(data: AssessmentData): Promise<RoadmapData
       tags: ['roadmap', data.goal, ...data.focusAreas],
       version: '1.0.0',
     });
-
     return completeRoadmap;
   } catch (error) {
     console.error('Roadmap generation failed:', error);

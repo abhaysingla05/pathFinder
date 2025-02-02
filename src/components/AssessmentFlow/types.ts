@@ -92,9 +92,15 @@ export interface QuizQuestion {
 }
 
 // Roadmap Data Type
+// types/assessment.ts
 export interface RoadmapData {
   weeks: RoadmapWeek[];
-  metadata: RoadmapMetadata;
+  metadata: {
+    totalWeeks: number;
+    weeklyCommitment: number;
+    difficulty: string;
+    focusAreas: string[];
+  };
 }
 
 // Roadmap Week Type
