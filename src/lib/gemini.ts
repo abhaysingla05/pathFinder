@@ -99,23 +99,43 @@ export async function generateQuiz(userInput: QuizGenerationInput): Promise<Quiz
 }
 
 // Generate Quiz for a Week
+// In lib/gemini.ts
 export async function generateQuizForWeek(topics: string[], weekNumber: number, skillLevel: number): Promise<WeeklyQuizData> {
+  const enhancedTopics = topics.map(topic => ({
+    topic,
+    keywords: topic.split(' ').filter(word => word.length > 3),
+    category: topic.includes('basic') || topic.includes('fundamental') ? 'fundamental' : 
+             topic.includes('advanced') ? 'advanced' : 'intermediate'
+  }));
+
   const userInput = {
     goal: 'Weekly Assessment',
-    skillLevel: skillLevel || 3, // Use dynamic skill level
-    timeCommitment: 2, // Time commitment in hours
+    skillLevel: skillLevel || 3,
+    timeCommitment: 2,
     focusAreas: topics,
+    topicDetails: enhancedTopics, // Add enhanced topic information
   };
+
   const quiz = await generateQuiz(userInput);
+  
+  // Validate quiz questions are relevant to topics
+  const validatedQuestions = quiz.questions.filter(question => 
+    enhancedTopics.some(topic => 
+      topic.keywords.some(keyword => 
+        question.text.toLowerCase().includes(keyword.toLowerCase())
+      )
+    )
+  );
+
   return {
     data: {
-      questions: quiz.questions || [],
+      questions: validatedQuestions.length >= 3 ? validatedQuestions : quiz.questions,
     },
     metadata: {
       generatedAt: new Date().toISOString(),
     },
-    purpose: 'adaptive_learning', // Indicates this is a weekly quiz
-    weekNumber, // Week number in the roadmap
+    purpose: 'adaptive_learning',
+    weekNumber,
   };
 }
 
