@@ -1,3 +1,4 @@
+import { handleCacheError } from "./errorBoundary";
 // lib/utils/cache.ts
 export interface CacheOptions {
   expiryTime?: number;
@@ -24,7 +25,36 @@ export interface CacheStats {
 
 export class AdvancedCache {
   private static readonly DEFAULT_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-  private static readonly VERSION = '1.0.0'; // Cache version for breaking changes
+  private static readonly VERSION = '1.0.0';
+  
+private static cache: Map<string, CacheItem<any>> = new Map();
+
+  static async clearByTags(tags: string[]): Promise<void> {
+    try {
+      if (!tags || !Array.isArray(tags)) {
+        console.warn('Invalid tags provided to clearByTags');
+        return;
+      }
+
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        try {
+          const item = localStorage.getItem(key);
+          if (item) {
+            const parsed = JSON.parse(item);
+            if (parsed.tags && Array.isArray(parsed.tags) && 
+                tags.some(tag => parsed.tags.includes(tag))) {
+              localStorage.removeItem(key);
+            }
+          }
+        } catch (error) {
+          handleCacheError(error);
+        }
+      }
+    } catch (error) {
+      handleCacheError(error);
+    }
+  }
 
   static async set<T>(
     key: string, 
@@ -92,22 +122,7 @@ export class AdvancedCache {
     }
   }
 
-  static async clearByTags(tags: string[]): Promise<void> {
-    const keys = Object.keys(localStorage);
-    for (const key of keys) {
-      try {
-        const item = localStorage.getItem(key);
-        if (item) {
-          const { tags: itemTags }: CacheItem<any> = JSON.parse(item);
-          if (tags.some(tag => itemTags.includes(tag))) {
-            localStorage.removeItem(key);
-          }
-        }
-      } catch (error) {
-        console.error(`Error clearing cache for key ${key}:`, error);
-      }
-    }
-  }
+  
 
   private static async ensureStorageSpace(requiredBytes: number): Promise<void> {
     while (this.getStorageUsed() + requiredBytes > this.getStorageLimit()) {

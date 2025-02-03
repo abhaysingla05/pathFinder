@@ -31,15 +31,33 @@ export interface InitialQuizAnalysis extends QuizAnalysis {
 }
 
 // Weekly Quiz Types
+
 export interface WeeklyQuizData {
   data: {
-    questions: QuizQuestion[];
+    questions: MultipleChoiceQuestion[];
   };
   metadata: {
     generatedAt: string;
+    difficulty: 'beginner' | 'intermediate' | 'advanced';
+    adaptiveLevel: number;
   };
-  purpose: 'adaptive_learning'; // Indicates this is a weekly quiz
-  weekNumber: number; // Week number in the roadmap
+  purpose: 'adaptive_learning';
+  weekNumber: number;
+}
+// types/assessment.ts
+export interface MultipleChoiceQuestion {
+  id: string;
+  text: string;  // This is what will be displayed as the question
+  type: 'multiple_choice';
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+  topic: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  points: number;
+  category: string;
+  skillArea: string;
+
 }
 
 export interface WeeklyQuizAnalysis extends QuizAnalysis {
@@ -78,17 +96,18 @@ export interface QuizData {
 }
 
 // Quiz Question Type
+// types/assessment.ts
 export interface QuizQuestion {
   id: string;
   text: string;
   type: 'multiple_choice' | 'open_ended';
-  category: string; // e.g., 'fundamentals', 'advanced', 'practical'
-  skillArea: string; // Maps to focusAreas
+  category: string;
+  skillArea: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
-  options?: string[]; // For multiple-choice questions
-  correctAnswer?: string; // For multiple-choice or open-ended questions
-  explanation?: string; // Explains the correct answer
-  points: number; // Weight of the question
+  options?: string[];
+  correctAnswer: string;
+  explanation: string;
+  points: number;
 }
 
 // types/assessment.ts
@@ -107,15 +126,19 @@ export interface RoadmapWeek {
   week: number;
   theme: string;
   topics: string[];
-  resources: LearningResource[];
-  projects: Project[]; // For multiple projects
-  project?: Project; // For single project
-  weeklyHours: number;
-  assessmentCriteria?: string[];
-  progress?: number; // Percentage completion of the week
-  quiz?: WeeklyQuizData; // Weekly quiz for adaptive learning
-  completed?: boolean; // Whether the week is marked as completed
-  quizPassed?: boolean; // Whether the user passed the quiz for this week
+  isLoaded?: boolean;
+  resources?: LearningResource[];
+  project: {
+    title: string;
+    description: string;
+    estimatedHours: number;
+  };
+  weeklyHours?: number;
+  
+  quiz?: WeeklyQuizData;
+  completed?: boolean;
+  quizPassed?: boolean;
+  adaptiveLevel?: number; // 1-5 for difficulty adjustment
 }
 
 // Learning Resource Type

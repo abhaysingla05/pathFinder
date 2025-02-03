@@ -1,11 +1,17 @@
-// RoadmapDisplay.tsx
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RoadmapData, AssessmentData } from "../../../types/assessment";
+import { toast } from 'sonner';  // Add this at the top of your file
 
+import { 
+  RoadmapData, 
+  AssessmentData, 
+  MultipleChoiceQuestion,
+  WeeklyQuizData , RoadmapWeek,
+  QuizQuestion
+} from "../../../types/assessment";
 import { LoadingState } from '../../common/LoadingState';
 import { SuccessNotification } from '../../common/SuccessNotification';
-// Define types for quiz answer state keyed by question index
+
 type AnswersState = { [key: number]: string };
 
 interface RoadmapDisplayProps {
@@ -13,7 +19,7 @@ interface RoadmapDisplayProps {
   assessmentData: AssessmentData;
   onClose: () => void;
 }
-// Animation variants
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { duration: 0.5 } },
@@ -25,6 +31,20 @@ const cardVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
   exit: { opacity: 0, y: 20 }
 };
+
+const isMultipleChoiceQuestion = (question: any): question is MultipleChoiceQuestion => {
+  return (
+    question &&
+    typeof question.text === 'string' &&
+    question.type === 'multiple_choice' &&
+    Array.isArray(question.options) &&
+    typeof question.correctAnswer === 'string' &&
+    typeof question.topic === 'string' &&
+    typeof question.difficulty === 'string' &&
+    typeof question.points === 'number'
+  );
+};
+
 export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplayProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -34,18 +54,10 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
   const [quizScores, setQuizScores] = useState<{ [key: number]: number }>({});
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [currentQuizWeek, setCurrentQuizWeek] = useState<number | null>(null);
-  const [quizQuestions, setQuizQuestions] = useState<
-    {
-      question: string;
-      options?: string[];
-      answer: string;
-      type: 'multiple_choice' | 'open_ended';
-    }[]
-  >([]);
+  const [quizQuestions, setQuizQuestions] = useState<MultipleChoiceQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<AnswersState>({});
 
-  // Load progress from local storage
   useEffect(() => {
     const savedProgress = localStorage.getItem('learningPathProgress');
     if (savedProgress) {
@@ -55,7 +67,6 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
     }
   }, []);
 
-  // Save progress to local storage
   useEffect(() => {
     const progress = {
       completedWeeks,
@@ -67,14 +78,19 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
   useEffect(() => {
     const progress = (completedWeeks.length / data.weeks.length) * 100;
     setOverallProgress(progress);
-  }, [completedWeeks, data.weeks.length]);
 
-  // Only allow toggling if week is unlocked.
+    localStorage.setItem('learningPathProgress', JSON.stringify({
+      completedWeeks,
+      quizScores,
+      lastWeek: expandedWeek,
+      overallProgress: progress
+    }));
+  }, [completedWeeks, data.weeks.length, quizScores, expandedWeek]);
+
   const toggleWeek = (weekNumber: number) => {
     if (!isWeekUnlocked(weekNumber)) return;
     setIsLoading(true);
     
-    // Add a fade out effect
     const content = document.getElementById('week-content');
     if (content) {
       content.style.opacity = '0';
@@ -84,7 +100,6 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
       setExpandedWeek(expandedWeek === weekNumber ? null : weekNumber);
       setIsLoading(false);
       
-      // Fade back in
       if (content) {
         content.style.opacity = '1';
       }
@@ -97,40 +112,83 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
     }
   };
 
-
-  const handleQuizSubmission = () => {
+  const handleQuizSubmission = async () => {
     setIsLoading(true);
     try {
-    const correctAnswers = quizQuestions.reduce((acc, q, index) => {
-      return { ...acc, [index]: q.answer };
-    }, {} as { [key: number]: string });
-
-    const score =
-      (Object.keys(selectedAnswers).filter((key) => {
-        const userAnswer = selectedAnswers[parseInt(key)]?.toLowerCase().trim() || "";
-        const correctAnswer = correctAnswers[parseInt(key)].toLowerCase().trim();
-        return userAnswer === correctAnswer;
-      }).length / quizQuestions.length) *
-      100;
-
-    if (currentQuizWeek !== null) {
-      setQuizScores({ ...quizScores, [currentQuizWeek]: score });
-      if (score >= 70) {
-        markWeekAsCompleted(currentQuizWeek);
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
-      } else {
-        alert('You need to score at least 70% to unlock the next week.');
+      const totalPoints = quizQuestions.reduce((sum, q) => sum + q.points, 0);
+      const earnedPoints = Object.entries(selectedAnswers).reduce((sum, [index, answer]) => {
+        const question = quizQuestions[parseInt(index)];
+        if (!question) return sum;
+        return sum + (answer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim() ? question.points : 0);
+      }, 0);
+  
+      const score = (earnedPoints / totalPoints) * 100;
+  
+      if (currentQuizWeek !== null) {
+        setQuizScores({ ...quizScores, [currentQuizWeek]: score });
+        
+        if (score >= 70) {
+          markWeekAsCompleted(currentQuizWeek);
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 3000);
+  
+          // Load next batch of weeks if needed
+          const nextWeek = currentQuizWeek + 1;
+          if (nextWeek <= data.weeks.length && !data.weeks[nextWeek - 1].isLoaded) {
+            // Call your API to get next weeks' content
+            try {
+              const response = await fetch(`/api/roadmap/weeks?start=${nextWeek}&count=4}`);
+              const newWeeks = await response.json();
+              // Update your data with new weeks
+              data.weeks.splice(nextWeek - 1, newWeeks.length, ...newWeeks);
+            } catch (error) {
+              console.error('Error loading next weeks:', error);
+            }
+          }
+        } else {
+          const weakTopics = identifyWeakTopics();
+          const feedback = generateFeedback(weakTopics);
+          alert(feedback);
+        }
       }
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+      alert('There was an error submitting your quiz. Please try again.');
+    } finally {
+      setIsLoading(false);
+      setIsQuizModalOpen(false);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers({});
     }
-  }catch(error) {
-    console.error('Error submitting quiz:', error);
-  }finally{
-    setIsLoading(false); // Add this lin
-    setIsQuizModalOpen(false);
-    setCurrentQuestionIndex(0);
-    setSelectedAnswers({});
-  }
+  };
+  const identifyWeakTopics = () => {
+    const topicScores: Record<string, { correct: number; total: number }> = {};
+    
+    Object.entries(selectedAnswers).forEach(([index, answer]) => {
+      const question = quizQuestions[parseInt(index)];
+      if (!question) return;
+      
+      const topic = question.topic;
+      if (!topicScores[topic]) {
+        topicScores[topic] = { correct: 0, total: 0 };
+      }
+      
+      topicScores[topic].total++;
+      if (answer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim()) {
+        topicScores[topic].correct++;
+      }
+    });
+
+    return Object.entries(topicScores)
+      .filter(([_, scores]) => (scores.correct / scores.total) < 0.7)
+      .map(([topic]) => topic);
+  };
+
+  const generateFeedback = (weakTopics: string[]) => {
+    if (weakTopics.length === 0) {
+      return 'You\'re doing well, but need a bit more practice to reach the passing score.';
+    }
+    return `Please review these topics before retrying:\n${weakTopics.map(topic => `- ${topic}`).join('\n')}`;
   };
 
   const goToPreviousQuestion = () => {
@@ -148,34 +206,100 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
   const openQuizModal = async (weekNumber: number) => {
     try {
       setIsLoading(true);
-      const week = data.weeks.find((w) => w.week === weekNumber);
-      if (!week?.quiz?.data?.questions) {
+      const selectedWeek = data.weeks.find((w) => w.week === weekNumber);
+      
+      if (!selectedWeek?.quiz?.data?.questions) {
         throw new Error('No valid quiz available for this week.');
       }
-      
-      setQuizQuestions(
-        week.quiz.data.questions.map((q) => ({
-          question: q.text,
-          options: q.options,
-          answer: q.correctAnswer || '',
-          type: q.type || 'multiple_choice',
-        }))
+  
+      console.log('Quiz questions:', selectedWeek.quiz.data.questions);
+  
+      const validQuestions = selectedWeek.quiz.data.questions.filter(q => 
+        q.text && 
+        Array.isArray(q.options) && 
+        q.options.length === 4 && 
+        q.correctAnswer
       );
+  
+      if (validQuestions.length === 0) {
+        throw new Error('No valid questions found');
+      }
+  
+      setQuizQuestions(validQuestions);
       setCurrentQuizWeek(weekNumber);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers({});
       setIsQuizModalOpen(true);
+  
     } catch (error) {
       console.error('Error loading quiz:', error);
-      alert(error instanceof Error ? error.message : 'Failed to load quiz');
+      const selectedWeek = data.weeks.find((w) => w.week === weekNumber);
+      
+      if (!selectedWeek) {
+        toast.error('Week data not found');
+        return;
+      }
+  
+      // Generate dynamic fallback questions based on the week's topics
+      const fallbackQuestions: MultipleChoiceQuestion[] = selectedWeek.topics.map((topic, index) => {
+        const questionTypes = [
+          {
+            text: `What is the primary purpose of ${topic}?`,
+            options: [
+              `To manage system resources`,
+              `To process data efficiently`,
+              `To provide user interface`,
+              `To handle security`
+            ],
+            correctAnswer: `To process data efficiently`
+          },
+          {
+            text: `Which component is essential for ${topic}?`,
+            options: [
+              `Data processing unit`,
+              `Control mechanism`,
+              `User interface`,
+              `All of the above`
+            ],
+            correctAnswer: `All of the above`
+          }
+        ];
+  
+        const questionTemplate = questionTypes[index % questionTypes.length];
+  
+        return {
+          id: `fallback_${weekNumber}_${index}`,
+          text: questionTemplate.text,
+          type: 'multiple_choice',
+          options: questionTemplate.options,
+          correctAnswer: questionTemplate.correctAnswer,
+          explanation: `This tests understanding of ${topic} fundamentals`,
+          difficulty: 'beginner',
+          topic,
+          category: topic,
+          skillArea: topic,
+          points: 20
+        };
+      });
+  
+      setQuizQuestions(fallbackQuestions);
+      setCurrentQuizWeek(weekNumber);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers({});
+      setIsQuizModalOpen(true);
+      
+      toast.error('Using fallback questions due to loading error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Determines if a week is unlocked: first week is unlocked, others need the previous week completed.
   const isWeekUnlocked = (weekNumber: number) => {
     if (weekNumber === 1) return true;
     return completedWeeks.includes(weekNumber - 1);
   };
+
+
 
   return (
     // Replace the first div in your return statement
@@ -342,7 +466,7 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
                       <section>
                         <h3 className="text-2xl font-semibold text-white mb-4">Learning Resources</h3>
                         <div className="space-y-4">
-                          {week.resources.map((resource, index) => (
+                          {week.resources?.map((resource, index) => (
                             <motion.div
                               key={index}
                               whileHover={{ x: 8 }}
@@ -382,7 +506,11 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
                             </motion.div>
-                          ))}
+                          )) || (  // Add fallback for no resources
+                            <div className="text-gray-400 text-center py-4">
+                              No resources available for this week
+                            </div>
+                          )}
                         </div>
                       </section>
 
@@ -427,123 +555,140 @@ export const RoadmapDisplay = ({ data, assessmentData, onClose }: RoadmapDisplay
       </div>
 
       {/* Quiz Modal */}
-      <AnimatePresence>
-        {isQuizModalOpen && currentQuizWeek !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+      {/* Quiz Modal */}
+<AnimatePresence>
+  {isQuizModalOpen && currentQuizWeek !== null && quizQuestions.length > 0 && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="relative w-full max-w-2xl bg-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="p-6 border-b border-gray-700">
+          <h2 className="text-2xl font-bold text-white">Week {currentQuizWeek} Assessment</h2>
+          <button
+            onClick={() => setIsQuizModalOpen(false)}
+            className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors"
           >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-slate-900 rounded-2xl shadow-2xl border border-indigo-500/20"
-            >
-              <div className="p-6 border-b border-gray-700">
-                <h2 className="text-2xl font-bold text-white">Week {currentQuizWeek} Assessment</h2>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-8">
+            {/* Progress Bar */}
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-sm text-gray-400">
+                Question {currentQuestionIndex + 1} of {quizQuestions.length}
+              </span>
+              <div className="h-2 flex-1 mx-4 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-300"
+                  style={{ width: `${((currentQuestionIndex + 1) / quizQuestions.length) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Question Content */}
+<div className="space-y-6">
+  <div>
+    <p className="text-xl text-white mb-2">
+      {quizQuestions[currentQuestionIndex]?.text}
+    </p>
+    <div className="flex items-center space-x-2 text-sm text-gray-400">
+      <span>Difficulty: {quizQuestions[currentQuestionIndex]?.difficulty}</span>
+      <span>•</span>
+      <span>Points: {quizQuestions[currentQuestionIndex]?.points}</span>
+    </div>
+  </div>
+
+  {/* Answer Options */}
+  <div className="space-y-4">
+    {quizQuestions[currentQuestionIndex]?.options.map((option, index) => (
+      <motion.button
+        key={index}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={() => setSelectedAnswers({ ...selectedAnswers, [currentQuestionIndex]: option })}
+        className={`w-full p-4 rounded-lg border text-left transition-all
+          ${selectedAnswers[currentQuestionIndex] === option
+            ? 'bg-indigo-600 border-indigo-500 text-white'
+            : 'bg-white/5 border-gray-700 text-gray-300 hover:bg-white/10'}`}
+      >
+        <div className="flex items-start">
+          <span className="w-6 h-6 rounded-full border border-current flex items-center justify-center mr-3 flex-shrink-0">
+            {String.fromCharCode(65 + index)}
+          </span>
+          <span>{option}</span>
+        </div>
+      </motion.button>
+    ))}
+  </div>
+
+
+              {/* Question Navigation */}
+              <div className="flex justify-between pt-6">
                 <button
-                  onClick={() => setIsQuizModalOpen(false)}
-                  className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors"
+                  onClick={goToPreviousQuestion}
+                  disabled={currentQuestionIndex === 0}
+                  className="px-6 py-3 rounded-lg bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors flex items-center space-x-2"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
+                  <span>Previous</span>
                 </button>
-              </div>
 
-              <div className="p-6">
-                <div className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm text-gray-400">
-                      Question {currentQuestionIndex + 1} of {quizQuestions.length}
-                    </span>
-                    <div className="h-2 flex-1 mx-4 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-500 transition-all duration-300"
-                        style={{ width: `${((currentQuestionIndex + 1) / quizQuestions.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <p className="text-xl text-white mb-6">
-                    {quizQuestions[currentQuestionIndex].question}
-                  </p>
-
-                  {/* Answer Options */}
-                  <div className="space-y-4">
-                    {quizQuestions[currentQuestionIndex].type === 'multiple_choice' &&
-                      quizQuestions[currentQuestionIndex].options?.map((option, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setSelectedAnswers({ ...selectedAnswers, [currentQuestionIndex]: option })}
-                          className={`w-full p-4 rounded-lg border text-left transition-all
-                            ${selectedAnswers[currentQuestionIndex] === option
-                              ? 'bg-indigo-600 border-indigo-500 text-white'
-                              : 'bg-white/5 border-gray-700 text-gray-300 hover:bg-white/10'}`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-
-                    {quizQuestions[currentQuestionIndex].type === 'open_ended' && (
-                      <input
-                        type="text"
-                        value={selectedAnswers[currentQuestionIndex] || ''}
-                        onChange={(e) => setSelectedAnswers({
-                          ...selectedAnswers,
-                          [currentQuestionIndex]: e.target.value,
-                        })}
-                        className="w-full p-4 bg-white/5 border border-gray-700 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Type your answer here..."
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="flex justify-between">
+                {currentQuestionIndex < quizQuestions.length - 1 ? (
                   <button
-                    onClick={goToPreviousQuestion}
-                    disabled={currentQuestionIndex === 0}
-                    className="px-6 py-3 rounded-lg bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
+                    onClick={goToNextQuestion}
+                    className="px-6 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center space-x-2"
                   >
-                    Previous
+                    <span>Next</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
-                  
-                  {currentQuestionIndex < quizQuestions.length - 1 ? (
-                    <button
-                      onClick={goToNextQuestion}
-                      className="px-6 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-                    >
-                      Next
-                    </button>
-                  ) : (
-                    <button
-                          onClick={handleQuizSubmission}
-                          disabled={isLoading}
-                          className="px-6 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
-                        >
-                          {isLoading ? (
-                            <>
-                              <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                              </svg>
-                              <span>Submitting...</span>
-                            </>
-                          ) : (
-                            'Submit Quiz'
-                          )}
-                        </button>
-                  )}
-                </div>
+                ) : (
+                  <button
+                    onClick={handleQuizSubmission}
+                    disabled={isLoading}
+                    className="px-6 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Submit Quiz</span>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
     </motion.div>
   );
 };

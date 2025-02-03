@@ -9,46 +9,42 @@ Your goal is to accurately evaluate a learner's knowledge and capabilities.`,
 and modern learning methodologies. Your goal is to create personalized, effective learning journeys.`
 };
 
+// lib/prompts/index.ts
 export const getQuizPrompt = (input: QuizGenerationInput) => {
-  const difficultyMapping = {
-    1: { level: 'beginner', focus: 'fundamental concepts' },
-    2: { level: 'beginner-intermediate', focus: 'basic applications' },
-    3: { level: 'intermediate', focus: 'practical implementations' },
-    4: { level: 'intermediate-advanced', focus: 'complex scenarios' },
-    5: { level: 'advanced', focus: 'expert-level problems' }
-  };
-
-  const difficulty = difficultyMapping[input.skillLevel as keyof typeof difficultyMapping];
+  const difficulty = input.skillLevel <= 2 ? 'beginner' : 
+                    input.skillLevel <= 4 ? 'intermediate' : 'advanced';
 
   return {
     system: SYSTEM_PROMPTS.quiz,
-    user: `Generate a quiz with EXACTLY this structure:
+    user: `
+Generate a multiple-choice quiz with EXACTLY this structure:
 {
   "questions": [
     {
-      "id": "mc1",
-      "text": "your multiple choice question here",
+      "id": "q1",
+      "text": "Clear question text here",
       "type": "multiple_choice",
+      "category": "${input.goal}",
+      "skillArea": "${input.focusAreas[0] || input.goal}",
       "options": ["option1", "option2", "option3", "option4"],
-      "correctAnswer": "option1"
-    },
-    {
-      "id": "oe1",
-      "text": "your open ended question here",
-      "type": "open_ended"
+      "correctAnswer": "option1",
+      "difficulty": "${difficulty}",
+      "points": 10,
+      "explanation": "Explanation of the correct answer"
     }
   ]
 }
 
 Requirements:
-- EXACTLY 3 multiple-choice questions
-- EXACTLY 2 open-ended questions
-- Each multiple-choice question must have EXACTLY 4 options
-- Questions should be about: ${input.goal}
-- Difficulty level: ${difficulty.level}
-- Focus areas: ${input.focusAreas.join(', ')}
+- Generate EXACTLY 5 questions
+- Each question MUST have EXACTLY 4 options
+- Questions must be about: ${input.goal}
+- Focus on these areas: ${input.focusAreas.join(', ')}
+- All questions must be multiple-choice
+- Each question must have a clear explanation
+- Points should be between 10-20
 
-Return ONLY the JSON, no additional text or formatting.`
+Return ONLY valid JSON matching the exact structure above.`
   };
 };
 
@@ -143,46 +139,46 @@ Important Guidelines:
 Return ONLY the JSON object, no additional text.`
   };
 };
+// In lib/prompts/index.ts
+// In lib/prompts/index.ts
 export const getWeeklyQuizPrompt = (topics: string[], weekNumber: number) => {
-  const difficultyMapping = {
-    1: { level: 'beginner', focus: 'fundamental concepts' },
-    2: { level: 'beginner-intermediate', focus: 'basic applications' },
-    3: { level: 'intermediate', focus: 'practical implementations' },
-    4: { level: 'intermediate-advanced', focus: 'complex scenarios' },
-    5: { level: 'advanced', focus: 'expert-level problems' }
-  };
-
-  // Determine difficulty based on week progression
-  const difficultyLevel = Math.min(Math.ceil(weekNumber / 3), 5); // Progress from beginner to advanced over 12 weeks
-  const difficulty = difficultyMapping[difficultyLevel as keyof typeof difficultyMapping];
-
   return {
     system: SYSTEM_PROMPTS.quiz,
     user: `
-Generate a weekly quiz with EXACTLY this structure:
+Generate a quiz specifically about these topics for Week ${weekNumber}:
+${topics.map(topic => `- ${topic}`).join('\n')}
+
+Requirements:
+1. Generate EXACTLY 5 questions with this structure:
 {
   "questions": [
     {
-      "id": "mc1",
-      "text": "your multiple choice question here",
-      "type": "multiple_choice",
-      "options": ["option1", "option2", "option3", "option4"],
-      "correctAnswer": "option1"
-    },
-    {
-      "id": "oe1",
-      "text": "your open ended question here",
-      "type": "open_ended"
+      "id": "string",
+      "text": "question text",
+      "type": "multiple_choice" | "open_ended",
+      "category": "topic category",
+      "skillArea": "specific topic area",
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "points": number,
+      "options": ["option1", "option2", "option3", "option4"] (for multiple_choice only),
+      "correctAnswer": "string",
+      "explanation": "explanation of the correct answer"
     }
   ]
 }
-Requirements:
-- EXACTLY 3 multiple-choice questions
-- EXACTLY 2 open-ended questions
-- Each multiple-choice question must have EXACTLY 4 options
-- Questions should be about: ${topics.join(', ')}
-- Difficulty level: ${difficulty.level}
-- Focus areas: ${difficulty.focus}
+
+2. Include:
+   - 3 multiple-choice questions
+   - 2 open-ended questions
+3. Each question MUST be directly related to the given topics
+4. Multiple-choice questions must have EXACTLY 4 options
+5. Questions should test understanding and application of concepts
+
+Important:
+- Questions must be specifically about: ${topics.join(', ')}
+- Include practical applications and real-world scenarios
+- Ensure questions test different levels of understanding
+
 Return ONLY the JSON, no additional text or formatting.`
   };
 };

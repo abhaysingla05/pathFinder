@@ -45,6 +45,15 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
 
   const handleNext = async (data: AssessmentData) => {  
     try {
+      const validatedData = {
+        ...data,
+        skillLevel: isNaN(data.skillLevel) ? 1 : Math.min(Math.max(Math.round(data.skillLevel), 1), 5),
+        focusAreas: data.focusAreas?.length ? data.focusAreas : ['fundamentals'],
+        timeCommitment: data.timeCommitment || 10,
+        learningPreferences: data.learningPreferences || [],
+        learningStyle: data.learningStyle || 'visual',
+        quizResponses: data.quizResponses || []
+      };
       if (currentStep === 2) { // After TimeCommitmentStep
         setLoading(true);
         setLoadingMessage('Crafting your personalized assessment...');
@@ -52,45 +61,46 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
         
         try {
           const quiz = await generateQuiz({
-            goal: data.goal,
-            skillLevel: data.skillLevel,
-            focusAreas: data.focusAreas,
-            timeCommitment: data.timeCommitment
+            goal: validatedData.goal,
+            skillLevel: validatedData.skillLevel,
+            focusAreas: validatedData.focusAreas,
+            timeCommitment: validatedData.timeCommitment
           });
           
           clearInterval(progressInterval);
           setLoadingProgress(100);
           
-          setAssessmentData(prev => ({ ...prev, ...data, generatedQuiz: quiz }));
-          setCurrentStep(prev => prev + 1);
+          setTimeout(() => {
+            setAssessmentData(prev => ({ ...prev, ...validatedData, generatedQuiz: quiz }));
+            setCurrentStep(prev => prev + 1);
+          }, 0);
         } catch (error) {
           clearInterval(progressInterval);
-          throw error;
+          console.error('Quiz generation error:', error);
+          toast.error('Failed to generate quiz. Using fallback questions.');
         }
       } 
       else if (currentStep === 3) { // After QuizStep
         setLoading(true);
         setLoadingMessage('Analyzing your quiz responses...');
 
-        if (!data.generatedQuiz || !data.quizResponses.length) {
+        if (!validatedData.generatedQuiz || !validatedData.quizResponses.length) {
           throw new Error('Quiz data is missing');
         }
-        // Analyze quiz responses
-        const quizAnalysis = analyzeQuizResponses(
-          data.generatedQuiz!.questions,
-          data.quizResponses,
-          data.skillLevel
-        );
-        // Ensure we have a valid skill level
-      const adjustedSkillLevel = Number(quizAnalysis.adjustedSkillLevel.overall) || data.skillLevel;
 
-        // Update data with quiz analysis and adjusted skill level
+        const quizAnalysis = analyzeQuizResponses(
+          validatedData.generatedQuiz.questions,
+          validatedData.quizResponses,
+          validatedData.skillLevel
+        );
+
+        const adjustedSkillLevel = Number(quizAnalysis.adjustedSkillLevel.overall) || validatedData.skillLevel;
+
         const updatedData = {
-          ...data,
+          ...validatedData,
           quizAnalysis,
           skillLevel: adjustedSkillLevel
         };
-        console.log('Updated assessment data:', updatedData);
 
         setLoadingMessage('Creating your personalized learning roadmap...');
         const progressInterval = startProgressSimulation();
@@ -108,7 +118,7 @@ export default function AssessmentFlow({ onClose }: AssessmentFlowProps) {
         }
       } 
       else {
-        setAssessmentData(prev => ({ ...prev, ...data }));
+        setAssessmentData(prev => ({ ...prev, ...validatedData }));
         setCurrentStep(prev => prev + 1);
       }
     } catch (error) {

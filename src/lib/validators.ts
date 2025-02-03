@@ -1,50 +1,51 @@
+//lib.validators
 import { QuizData, RoadmapData } from "../types/assessment";
 
 // Quiz Validation
+// validators.ts
+// lib/validators.ts
 export function validateQuizStructure(quiz: any): quiz is QuizData {
   try {
     // Basic structure check
-    if (!quiz.questions || !Array.isArray(quiz.questions)) {
-      console.error('Quiz validation: questions array missing or not an array');
-      console.log('Received quiz structure:', JSON.stringify(quiz, null, 2));
+    if (!quiz || !quiz.questions || !Array.isArray(quiz.questions)) {
+      console.error('Quiz validation: Missing questions array');
       return false;
     }
 
-    // Log the actual response for debugging
-    console.log('Received quiz:', JSON.stringify(quiz, null, 2));
+    // Log for debugging
+    console.log('Validating quiz with questions:', quiz.questions.length);
 
-    // Make validation more lenient
-    const mcqCount = quiz.questions.filter((q: any) => 
-      q.type === 'multiple_choice'
-    ).length;
-    
-    const openEndedCount = quiz.questions.filter((q: any) => 
-      q.type === 'open_ended'
-    ).length;
-
-    // Just ensure we have at least one question of each type
-    if (mcqCount === 0 || openEndedCount === 0) {
-      console.error(`Quiz validation: Need at least one question of each type. Got MCQ: ${mcqCount}, Open-ended: ${openEndedCount}`);
-      return false;
-    }
-
-    // Validate each question's basic structure
-    return quiz.questions.every((q: any, index: number) => {
-      const hasBasicFields = 
+    return quiz.questions.every((q: any) => {
+      const isValid = 
+        typeof q.id === 'string' &&
         typeof q.text === 'string' &&
-        (q.type === 'multiple_choice' || q.type === 'open_ended');
+        q.type === 'multiple_choice' &&
+        typeof q.category === 'string' &&
+        typeof q.skillArea === 'string' &&
+        Array.isArray(q.options) &&
+        q.options.length === 4 &&
+        typeof q.correctAnswer === 'string' &&
+        typeof q.difficulty === 'string' &&
+        ['beginner', 'intermediate', 'advanced'].includes(q.difficulty) &&
+        typeof q.points === 'number' &&
+        typeof q.explanation === 'string';
 
-      if (!hasBasicFields) {
-        console.error(`Quiz validation: question ${index + 1} missing basic fields`);
-        return false;
+      if (!isValid) {
+        console.error('Question validation failed:', {
+          id: !!q.id,
+          text: !!q.text,
+          type: q.type === 'multiple_choice',
+          category: !!q.category,
+          skillArea: !!q.skillArea,
+          options: Array.isArray(q.options) && q.options.length === 4,
+          correctAnswer: !!q.correctAnswer,
+          difficulty: ['beginner', 'intermediate', 'advanced'].includes(q.difficulty),
+          points: typeof q.points === 'number',
+          explanation: !!q.explanation
+        });
       }
 
-      // For multiple choice, ensure we have options
-      if (q.type === 'multiple_choice') {
-        return Array.isArray(q.options) && q.options.length > 0;
-      }
-
-      return true;
+      return isValid;
     });
   } catch (error) {
     console.error('Quiz validation error:', error);

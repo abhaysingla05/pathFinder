@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AssessmentData } from '../../../types/assessment';
-import { QuizQuestion, QuizResponse } from "../types";
+import { QuizQuestion, QuizResponse } from "../../../types/assessment";
 import { Toaster, toast } from 'sonner';
 import { analyzeQuizResponses } from '../../../lib/quizAnalysis';
 
@@ -49,27 +49,30 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
         const question = data.generatedQuiz!.questions[parseInt(questionId)];
         return {
           questionId: questionId, // Already a string
-          answer,
+          answer: answer.trim(), // Ensure clean answers
           isCorrect: question.type === 'multiple_choice' ? 
-            answer === question.correctAnswer : undefined,
+          answer.trim().toLowerCase() === question.correctAnswer.toLowerCase() : undefined,
           points: undefined // Will be calculated by analysis
         };
       });
+      const currentSkillLevel = isNaN(data.skillLevel) ? 1 : data.skillLevel;
 
       // Analyze responses
       const analysis = analyzeQuizResponses(
         data.generatedQuiz!.questions,
         quizResponses,
-        data.skillLevel
+        currentSkillLevel
       );
+      const adjustedSkillLevel = Number(analysis.adjustedSkillLevel.overall) || currentSkillLevel;
 
       await onNext({ 
         ...data, 
         quizResponses,
         quizAnalysis: analysis,
-        skillLevel: analysis.adjustedSkillLevel.overall
+        skillLevel: adjustedSkillLevel
       });
     } catch (error) {
+      console.error('Quiz submission error:', error);
       toast.error('Failed to analyze responses. Please try again.');
     }
   };
