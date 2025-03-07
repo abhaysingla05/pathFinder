@@ -37,7 +37,7 @@ export class GeminiAPI {
     backoff: 2
   };
 
-  constructor(apiKey: string, modelName: string = 'gemini-pro') {
+  constructor(apiKey: string, modelName: string = 'gemini-1.5-pro-latest') {
     const genAI = new GoogleGenerativeAI(apiKey);
     this.model = genAI.getGenerativeModel({ model: modelName });
   }
@@ -64,20 +64,17 @@ export class GeminiAPI {
         
         // Use the correct format for Gemini API
         const result = await this.model.generateContent({
-          contents: [{
-            role: 'user',
-            parts: [{
-              text: prompt
-            }]
-          }],
+          contents: [{ parts: [{ text: prompt }] }], // ✅ CORRECT FORMAT
           generationConfig
         });
+        
 
         if (!result.response) {
           throw new Error('No response from Gemini API');
         }
 
-        const responseText = await result.response.text();
+        const responseText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
 
         if (!responseText || responseText.trim().length === 0) {
           throw new Error('Empty response from Gemini API');

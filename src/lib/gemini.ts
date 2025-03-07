@@ -12,20 +12,20 @@ const api = new GeminiAPI(import.meta.env.VITE_GEMINI_KEY);
 // Utility to clean JSON response from the API
 function cleanJsonResponse(response: string): string {
   try {
-    // Remove any markdown formatting
-    let cleaned = response.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // Find the first '[' and last ']' for array responses
-    const startIndex = cleaned.indexOf('[');
-    const endIndex = cleaned.lastIndexOf(']');
-    
-    if (startIndex !== -1 && endIndex !== -1) {
-      cleaned = cleaned.substring(startIndex, endIndex + 1);
+    // Find the start and end of the JSON array
+    const jsonStart = response.indexOf('[');
+    const jsonEnd = response.lastIndexOf(']');
+
+    if (jsonStart === -1 || jsonEnd === -1) {
+      throw new Error("Invalid JSON structure: Missing '[' or ']'.");
     }
-    
-    // Validate JSON structure
-    JSON.parse(cleaned); // This will throw if invalid
-    return cleaned;
+
+    // Extract the JSON portion
+    const jsonString = response.substring(jsonStart, jsonEnd + 1);
+
+    // Validate the JSON structure
+    JSON.parse(jsonString); // This will throw an error if the JSON is invalid
+    return jsonString;
   } catch (error) {
     console.error('Error cleaning JSON response:', error);
     throw new Error('Invalid JSON structure in response');
@@ -444,27 +444,27 @@ export async function loadWeekContent(week: RoadmapWeek, data: AssessmentData): 
   try {
     // Generate resource titles for each topic
     const resourcePrompt = `
-      For these topics: ${week.topics.join(', ')}
-      Generate titles for:
-      - 1 video tutorial
-      - 1 comprehensive article
-      - 1 practical course
-      per topic.
-      
-      Return as JSON array:
-      [
-        {
-          "topic": "topic name",
-          "resources": [
-            { "type": "video", "title": "video title" },
-            { "type": "article", "title": "article title" },
-            { "type": "course", "title": "course title" }
-          ]
-        }
-      ]`;
+  For these topics: ${week.topics.join(', ')}, generate:
+  - 1 video tutorial
+  - 1 comprehensive article
+  - 1 practical course
+  per topic.
+  Return as a STRICTLY VALID JSON array:
+  [
+    {
+      "topic": "Topic name",
+      "resources": [
+        { "type": "video", "title": "Video title" },
+        { "type": "article", "title": "Article title" },
+        { "type": "course", "title": "Course title" }
+      ]
+    }
+  ]`;
 
     const content = await api.generate('', resourcePrompt, { temperature: 0.7 });
+    console.log('Raw AI Response:', content);
     const resourceSuggestions = JSON.parse(cleanJsonResponse(content));
+
 
     // Fetch actual resources for each topic
     const allResources = await Promise.all(
@@ -543,7 +543,7 @@ export async function loadWeekContent(week: RoadmapWeek, data: AssessmentData): 
         {
           type: 'video',
           title: `Introduction to ${topic}`,
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=Lv0xcdeXaGU',
           duration: '30 minutes',
           difficulty: 'beginner',
           category: topic
@@ -551,7 +551,7 @@ export async function loadWeekContent(week: RoadmapWeek, data: AssessmentData): 
         {
           type: 'article',
           title: `${topic} Fundamentals`,
-          url: 'https://example.com/article',
+          url: 'https://www.simplilearn.com/statistics-for-data-science-article#:~:text=and%20analysis%20reliability.-,Fundamentals%20of%20Statistics,are%20descriptive%20and%20inferential%20statistics.',
           duration: '15 minutes',
           difficulty: 'beginner',
           category: topic
@@ -559,7 +559,7 @@ export async function loadWeekContent(week: RoadmapWeek, data: AssessmentData): 
         {
           type: 'course',
           title: `Complete ${topic} Course`,
-          url: 'https://example.com/course',
+          url: 'https://www.simplilearn.com/statistics-for-data-science-article#:~:text=and%20analysis%20reliability.-,Fundamentals%20of%20Statistics,are%20descriptive%20and%20inferential%20statistics.',
           duration: '5 hours',
           difficulty: 'intermediate',
           category: topic

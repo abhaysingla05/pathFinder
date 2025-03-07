@@ -4,7 +4,6 @@ import { QuizQuestion, QuizResponse } from "../../../types/assessment";
 import { Toaster, toast } from 'sonner';
 import { analyzeQuizResponses } from '../../../lib/quizAnalysis';
 
-
 interface QuizStepProps {
   data: AssessmentData;
   onNext: (data: AssessmentData) => Promise<void>;
@@ -12,13 +11,32 @@ interface QuizStepProps {
 
 export const QuizStep = ({ data, onNext }: QuizStepProps) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<{ [key: string]: string }>({}); // Changed to string key
+  const [answers, setAnswers] = useState<{ [key: string]: string }>({});
   const [charCount, setCharCount] = useState<number>(0);
 
-  const isCurrentQuestionAnswered = !!answers[currentQuestion.toString()]; // Convert to string
+  // Validate quiz data
+  if (!data.generatedQuiz || !Array.isArray(data.generatedQuiz.questions) || data.generatedQuiz.questions.length === 0) {
+    console.error('Invalid or missing quiz data:', data.generatedQuiz);
+    return <div>No quiz available. Please try again later.</div>;
+  }
+
+  // Ensure currentQuestion is within bounds
+  if (currentQuestion >= data.generatedQuiz.questions.length) {
+    console.error(`Invalid question index ${currentQuestion}:`, data.generatedQuiz.questions);
+    setCurrentQuestion(0); // Reset to the first question
+    return <div>Invalid quiz question. Resetting to the first question.</div>;
+  }
+
+  const question = data.generatedQuiz.questions[currentQuestion];
+  if (!question) {
+    console.error(`Invalid question at index ${currentQuestion}:`, data.generatedQuiz.questions);
+    return <div>Invalid quiz question. Please try again later.</div>;
+  }
+
+  const isCurrentQuestionAnswered = !!answers[currentQuestion.toString()];
 
   const handleAnswer = (questionId: number, answer: string) => {
-    setAnswers(prev => ({ ...prev, [questionId.toString()]: answer })); // Convert to string
+    setAnswers(prev => ({ ...prev, [questionId.toString()]: answer }));
   };
 
   const handleOpenEndedAnswer = (answer: string) => {
@@ -35,7 +53,7 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
     if (answer.length < 100) {
       return 'Good start! Adding more details will improve your answer';
     }
-    return 'Great length! Make sure you have  addressed all aspects of the question';
+    return 'Great length! Make sure you have addressed all aspects of the question';
   };
 
   const handleSubmit = async () => {
@@ -48,13 +66,15 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
       const quizResponses: QuizResponse[] = Object.entries(answers).map(([questionId, answer]) => {
         const question = data.generatedQuiz!.questions[parseInt(questionId)];
         return {
-          questionId: questionId, // Already a string
-          answer: answer.trim(), // Ensure clean answers
-          isCorrect: question.type === 'multiple_choice' ? 
-          answer.trim().toLowerCase() === question.correctAnswer.toLowerCase() : undefined,
-          points: undefined // Will be calculated by analysis
+          questionId: questionId,
+          answer: answer.trim(),
+          isCorrect: question.type === 'multiple_choice' 
+            ? answer.trim().toLowerCase() === question.correctAnswer.toLowerCase()
+            : undefined,
+          points: undefined
         };
       });
+
       const currentSkillLevel = isNaN(data.skillLevel) ? 1 : data.skillLevel;
 
       // Analyze responses
@@ -76,10 +96,6 @@ export const QuizStep = ({ data, onNext }: QuizStepProps) => {
       toast.error('Failed to analyze responses. Please try again.');
     }
   };
-
-  if (!data.generatedQuiz) return null;
-
-  const question = data.generatedQuiz.questions[currentQuestion];
 
   return (
     <div className="max-w-2xl mx-auto py-12">
