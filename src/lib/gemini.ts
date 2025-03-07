@@ -180,7 +180,7 @@ export async function generateQuizForWeek(topics: string[], weekNumber: number, 
       handleCacheError(error);
     }
 
-    // Generate MCQ questions with specific format
+    // Generate MCQ questions with specific forma
     const mcqPrompt = `
       Create 5 multiple-choice questions about these topics: ${topics.join(', ')}
       
